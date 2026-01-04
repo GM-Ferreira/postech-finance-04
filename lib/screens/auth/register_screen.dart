@@ -1,58 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'register_screen.dart';
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/validators.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _handleRegister() async {
     FocusScope.of(context).unfocus();
 
     if (_formKey.currentState!.validate()) {
       final authProvider = context.read<AuthProvider>();
 
-      final success = await authProvider.login(
+      final success = await authProvider.register(
         _emailController.text,
         _passwordController.text,
+        name: _nameController.text,
       );
 
       if (!mounted) return;
 
       if (success) {
-        // TODO: Navegar para a tela principal (Dashboard)
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Login realizado com sucesso!'),
+            content: Text('Conta criada com sucesso!'),
             backgroundColor: Colors.green,
           ),
         );
+        Navigator.of(context).pop();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(authProvider.errorMessage ?? 'Erro ao fazer login'),
+            content: Text(authProvider.errorMessage ?? 'Erro ao criar conta'),
             backgroundColor: Colors.red,
           ),
         );
@@ -60,10 +65,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _handleRegister() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (context) => const RegisterScreen()));
+  void _handleBackToLogin() {
+    Navigator.of(context).pop();
   }
 
   @override
@@ -81,15 +84,52 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: IconButton(
+                      onPressed: authProvider.isLoading
+                          ? null
+                          : _handleBackToLogin,
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: AppTheme.textDark,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
 
                   Image.asset(
-                    'assets/images/login_illustration.png',
-                    height: 220,
+                    'assets/images/register_illustration.png',
+                    height: 180,
                     fit: BoxFit.contain,
                   ),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 30),
+
+                  const Text(
+                    'Criar conta',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textDark,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  CustomTextField(
+                    label: 'Nome',
+                    hintText: 'Seu nome completo',
+                    controller: _nameController,
+                    keyboardType: TextInputType.name,
+                    validator: Validators.name,
+                    enabled: !authProvider.isLoading,
+                  ),
+
+                  const SizedBox(height: 16),
 
                   CustomTextField(
                     label: 'Email',
@@ -100,11 +140,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     enabled: !authProvider.isLoading,
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   CustomTextField(
                     label: 'Senha',
-                    hintText: 'Sua senha',
+                    hintText: 'Mínimo 6 caracteres',
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     enabled: !authProvider.isLoading,
@@ -124,14 +164,40 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: Validators.password,
                   ),
 
+                  const SizedBox(height: 16),
+
+                  CustomTextField(
+                    label: 'Confirmar Senha',
+                    hintText: 'Digite a senha novamente',
+                    controller: _confirmPasswordController,
+                    obscureText: _obscureConfirmPassword,
+                    enabled: !authProvider.isLoading,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: AppTheme.textGray,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
+                    validator: Validators.confirmPassword(
+                      _passwordController.text,
+                    ),
+                  ),
+
                   const SizedBox(height: 32),
 
                   Center(
                     child: CustomButton(
-                      text: 'Entrar',
-                      onPressed: _handleLogin,
+                      text: 'Criar conta',
+                      onPressed: _handleRegister,
                       isLoading: authProvider.isLoading,
-                      width: 150,
+                      width: 180,
                     ),
                   ),
 
@@ -141,13 +207,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
-                        'Não tem conta? ',
+                        'Já tem conta? ',
                         style: TextStyle(color: AppTheme.textGray),
                       ),
                       GestureDetector(
-                        onTap: _handleRegister,
+                        onTap: authProvider.isLoading
+                            ? null
+                            : _handleBackToLogin,
                         child: const Text(
-                          'Criar conta',
+                          'Fazer login',
                           style: TextStyle(
                             color: AppTheme.primaryGreen,
                             fontWeight: FontWeight.w600,
@@ -156,6 +224,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),

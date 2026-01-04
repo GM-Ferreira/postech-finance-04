@@ -1,0 +1,21 @@
+{
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "postech-finance-03",
+                    "appId": "1:975185951086:android:cb89ebbdc301661629a97f",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "postech-finance-03",
+                    "configurations": {
+                        "android": "1:975185951086:android:cb89ebbdc301661629a97f"
+                    }
+                }
+            }
+        }
+    }
+}

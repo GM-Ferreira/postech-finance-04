@@ -25,6 +25,16 @@ class Validators {
     return null;
   }
 
+  static String? name(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Por favor, insira seu nome';
+    }
+    if (value.trim().length < 3) {
+      return 'O nome deve ter pelo menos 3 caracteres';
+    }
+    return null;
+  }
+
   static String? Function(String?) confirmPassword(String password) {
     return (String? value) {
       if (value == null || value.isEmpty) {

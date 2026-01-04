@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "975185951086",
+    "project_id": "postech-finance-03",
+    "storage_bucket": "postech-finance-03.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:975185951086:android:cb89ebbdc301661629a97f",
+        "android_client_info": {
+          "package_name": "com.gui.postech_finance_03"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAX7jRt_dtGQI-7Jf5qjHdPAtkYSHV1jCs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
