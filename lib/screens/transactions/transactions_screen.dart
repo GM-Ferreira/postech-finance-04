@@ -7,6 +7,7 @@ import '../../models/transaction.dart' as models;
 import '../../providers/auth_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../widgets/common/custom_filter_chip.dart';
+import '../../widgets/common/receipt_viewer.dart';
 import '../../widgets/transactions/transaction_card.dart';
 import 'transaction_form_screen.dart';
 
@@ -197,6 +198,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                                 ),
                               );
                             },
+                            onViewReceipt: transaction.receiptUrl != null
+                                ? () => ReceiptViewer.show(
+                                    context,
+                                    url: transaction.receiptUrl,
+                                  )
+                                : null,
                           );
                         },
                       );

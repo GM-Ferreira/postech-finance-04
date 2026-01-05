@@ -7,12 +7,14 @@ class TransactionCard extends StatelessWidget {
   final models.Transaction transaction;
   final VoidCallback onDelete;
   final VoidCallback onEdit;
+  final VoidCallback? onViewReceipt;
 
   const TransactionCard({
     super.key,
     required this.transaction,
     required this.onDelete,
     required this.onEdit,
+    this.onViewReceipt,
   });
 
   @override
@@ -21,6 +23,7 @@ class TransactionCard extends StatelessWidget {
     final color = isIncome ? Colors.green : Colors.red;
     final icon = isIncome ? Icons.arrow_upward : Icons.arrow_downward;
     final sign = isIncome ? '+' : '-';
+    final hasReceipt = transaction.receiptUrl != null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -32,9 +35,27 @@ class TransactionCard extends StatelessWidget {
             backgroundColor: color.withValues(alpha: 0.1),
             child: Icon(icon, color: color),
           ),
-          title: Text(
-            transaction.description,
-            style: const TextStyle(fontWeight: FontWeight.w500),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  transaction.description,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+              if (hasReceipt)
+                GestureDetector(
+                  onTap: onViewReceipt,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Icon(
+                      Icons.attachment,
+                      size: 18,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+            ],
           ),
           subtitle: Text(
             '${transaction.category} • ${Formatters.date(transaction.date)}',

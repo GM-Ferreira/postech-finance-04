@@ -1,0 +1,76 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+
+import '../../config/app_theme.dart';
+
+class ReceiptViewer {
+  static void show(BuildContext context, {File? file, String? url}) {
+    assert(file != null || url != null, 'Deve passar file ou url');
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppBar(
+              title: const Text('Comprovante'),
+              backgroundColor: AppTheme.primaryGreen,
+              foregroundColor: Colors.white,
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                color: Colors.white,
+                onPressed: () => Navigator.pop(context),
+              ),
+              automaticallyImplyLeading: false,
+            ),
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: file != null
+                  ? Image.file(file, fit: BoxFit.contain)
+                  : Image.network(
+                      url!,
+                      fit: BoxFit.contain,
+                      frameBuilder:
+                          (context, child, frame, wasSynchronouslyLoaded) {
+                            if (wasSynchronouslyLoaded || frame != null) {
+                              return child;
+                            }
+                            return SizedBox(
+                              height: 300,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: AppTheme.primaryGreen,
+                                ),
+                              ),
+                            );
+                          },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const SizedBox(
+                          height: 200,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  size: 48,
+                                  color: Colors.red,
+                                ),
+                                SizedBox(height: 8),
+                                Text('Erro ao carregar imagem'),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

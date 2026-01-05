@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
@@ -7,8 +10,10 @@ import '../../models/transaction.dart' as models;
 import '../../models/transaction_type.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/storage_service.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/common/receipt_viewer.dart';
 import '../../widgets/common/type_button.dart';
 
 class TransactionFormScreen extends StatefulWidget {
@@ -32,6 +37,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
 
+  final StorageService _storageService = StorageService();
+  File? _selectedImage;
+  String? _existingReceiptUrl;
+  bool _removeExistingReceipt = false;
+
   List<String> get _categories =>
       TransactionCategory.labelsByType(_transactionType.value);
 
@@ -46,6 +56,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _transactionType = transaction.type;
       _selectedCategory = transaction.category;
       _selectedDate = transaction.date;
+      _existingReceiptUrl = transaction.receiptUrl;
     }
   }
 
@@ -87,6 +98,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     setState(() => _isLoading = true);
 
     final authProvider = context.read<AuthProvider>();
+    final transactionProvider = context.read<TransactionProvider>();
     final userId = authProvider.user?.uid;
 
     if (userId == null) {
@@ -105,7 +117,43 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final cleanAmount = _amountController.text.replaceAll(',', '.');
     final amount = double.parse(cleanAmount);
 
-    final transactionProvider = context.read<TransactionProvider>();
+    String? receiptUrl = _existingReceiptUrl;
+
+    try {
+      if (_selectedImage != null) {
+        final transactionId =
+            widget.transaction?.id ??
+            DateTime.now().millisecondsSinceEpoch.toString();
+
+        receiptUrl = await _storageService.uploadReceipt(
+          file: _selectedImage!,
+          userId: userId,
+          transactionId: transactionId,
+        );
+
+        if (_existingReceiptUrl != null) {
+          await _storageService.deleteReceipt(_existingReceiptUrl!);
+        }
+      }
+
+      if (_removeExistingReceipt && _existingReceiptUrl != null) {
+        await _storageService.deleteReceipt(_existingReceiptUrl!);
+        receiptUrl = null;
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao processar comprovante: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     bool success;
 
     if (widget.isEditing) {
@@ -115,6 +163,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         type: _transactionType,
         category: _selectedCategory,
         date: _selectedDate,
+        receiptUrl: receiptUrl,
       );
 
       success = await transactionProvider.updateTransaction(updated);
@@ -126,6 +175,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         type: _transactionType,
         category: _selectedCategory,
         date: _selectedDate,
+        receiptUrl: receiptUrl,
       );
       success = await transactionProvider.addTransaction(transaction);
     }
@@ -177,6 +227,174 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     }
 
     return null;
+  }
+
+  Future<void> _showImageSourceDialog() async {
+    final hasImage =
+        _selectedImage != null ||
+        (_existingReceiptUrl != null && !_removeExistingReceipt);
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasImage)
+              ListTile(
+                leading: const Icon(Icons.visibility),
+                title: const Text('Ver comprovante'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ReceiptViewer.show(
+                    context,
+                    file: _selectedImage,
+                    url: _existingReceiptUrl,
+                  );
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Tirar foto'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Escolher da galeria'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            if (hasImage)
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text(
+                  'Remover comprovante',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _removeReceipt();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final image = await _storageService.pickImage(source: source);
+      if (image != null) {
+        setState(() {
+          _selectedImage = image;
+          _removeExistingReceipt = false;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao selecionar imagem: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _removeReceipt() {
+    setState(() {
+      _selectedImage = null;
+      if (_existingReceiptUrl != null) {
+        _removeExistingReceipt = true;
+      }
+    });
+  }
+
+  Widget _buildReceiptSection() {
+    final hasNewImage = _selectedImage != null;
+    final hasExistingImage =
+        _existingReceiptUrl != null && !_removeExistingReceipt;
+    final hasImage = hasNewImage || hasExistingImage;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Comprovante',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: _isLoading ? null : _showImageSourceDialog,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            height: hasImage ? 200 : 100,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Colors.grey.shade400,
+                style: BorderStyle.solid,
+              ),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey.shade50,
+            ),
+            child: hasImage
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        hasNewImage
+                            ? Image.file(_selectedImage!, fit: BoxFit.cover)
+                            : Image.network(
+                                _existingReceiptUrl!,
+                                fit: BoxFit.cover,
+                              ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: Colors.black54,
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.edit,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                              onPressed: _showImageSourceDialog,
+                              padding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_photo_alternate,
+                          size: 40,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Adicionar comprovante',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -334,8 +552,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
                 const SizedBox(height: 24),
 
-                // TODO: Adicionar campo de comprovante (anexo) no futuro
-                const SizedBox(height: 16),
+                _buildReceiptSection(),
+
+                const SizedBox(height: 24),
 
                 CustomButton(
                   text: widget.isEditing ? 'Atualizar' : 'Salvar Transação',

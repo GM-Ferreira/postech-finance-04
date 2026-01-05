@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'transaction_type.dart';
 
+const _undefined = Object();
+
 class Transaction {
   final String? id;
   final String userId;
@@ -62,7 +64,7 @@ class Transaction {
     TransactionType? type,
     String? category,
     DateTime? date,
-    String? receiptUrl,
+    Object? receiptUrl = _undefined,
     DateTime? createdAt,
   }) {
     return Transaction(
@@ -73,7 +75,9 @@ class Transaction {
       type: type ?? this.type,
       category: category ?? this.category,
       date: date ?? this.date,
-      receiptUrl: receiptUrl ?? this.receiptUrl,
+      receiptUrl: receiptUrl == _undefined
+          ? this.receiptUrl
+          : receiptUrl as String?,
       createdAt: createdAt ?? this.createdAt,
     );
   }
