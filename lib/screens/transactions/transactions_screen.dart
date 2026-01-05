@@ -2,13 +2,77 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
+import '../../models/category.dart';
 import '../../models/transaction.dart' as models;
 import '../../providers/auth_provider.dart';
 import '../../providers/transaction_provider.dart';
 import 'transaction_form_screen.dart';
 
-class TransactionsScreen extends StatelessWidget {
+class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
+
+  @override
+  State<TransactionsScreen> createState() => _TransactionsScreenState();
+}
+
+class _TransactionsScreenState extends State<TransactionsScreen> {
+  String? _selectedType;
+  String? _selectedCategory;
+  DateTime? _startDate;
+  DateTime? _endDate;
+
+  bool get _hasActiveFilters =>
+      _selectedType != null ||
+      _selectedCategory != null ||
+      _startDate != null ||
+      _endDate != null;
+
+  void _clearFilters() {
+    setState(() {
+      _selectedType = null;
+      _selectedCategory = null;
+      _startDate = null;
+      _endDate = null;
+    });
+  }
+
+  Future<void> _selectDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppTheme.primaryGreen,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+      });
+    }
+  }
+
+  String _formatDateRange() {
+    if (_startDate == null || _endDate == null) return 'Período';
+
+    final start =
+        '${_startDate!.day.toString().padLeft(2, '0')}/${_startDate!.month.toString().padLeft(2, '0')}';
+    final end =
+        '${_endDate!.day.toString().padLeft(2, '0')}/${_endDate!.month.toString().padLeft(2, '0')}';
+    return '$start - $end';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,75 +86,122 @@ class TransactionsScreen extends StatelessWidget {
         backgroundColor: AppTheme.primaryGreen,
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          if (_hasActiveFilters)
+            IconButton(
+              icon: const Icon(Icons.filter_alt_off),
+              onPressed: _clearFilters,
+              tooltip: 'Limpar filtros',
+            ),
+        ],
       ),
       body: userId == null
           ? const Center(child: Text('Usuário não autenticado'))
-          : StreamBuilder<List<models.Transaction>>(
-              stream: transactionProvider.getTransactions(userId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: AppTheme.primaryGreen,
+          : Column(
+              children: [
+                _buildFilterBar(),
+
+                Expanded(
+                  child: StreamBuilder<List<models.Transaction>>(
+                    stream: transactionProvider.getFilteredTransactions(
+                      userId: userId,
+                      type: _selectedType,
+                      category: _selectedCategory,
+                      startDate: _startDate,
+                      endDate: _endDate,
                     ),
-                  );
-                }
-
-                if (snapshot.hasError) {
-                  return Center(child: Text('Erro: ${snapshot.error}'));
-                }
-
-                final transactions = snapshot.data ?? [];
-                if (transactions.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.receipt_long_outlined,
-                          size: 80,
-                          color: Colors.grey,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Nenhuma transação ainda',
-                          style: TextStyle(fontSize: 18, color: Colors.grey),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Toque no + para adicionar',
-                          style: TextStyle(fontSize: 14, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: transactions.length,
-                  itemBuilder: (context, index) {
-                    final transaction = transactions[index];
-                    return _TransactionCard(
-                      transaction: transaction,
-                      onDelete: () => _confirmDelete(
-                        context,
-                        transactionProvider,
-                        transaction,
-                      ),
-                      onEdit: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                TransactionFormScreen(transaction: transaction),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primaryGreen,
                           ),
                         );
-                      },
-                    );
-                  },
-                );
-              },
+                      }
+
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              'Erro: ${snapshot.error}',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+
+                      final transactions = snapshot.data ?? [];
+                      if (transactions.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _hasActiveFilters
+                                    ? Icons.search_off
+                                    : Icons.receipt_long_outlined,
+                                size: 80,
+                                color: Colors.grey,
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              Text(
+                                _hasActiveFilters
+                                    ? 'Nenhuma transação encontrada'
+                                    : 'Nenhuma transação ainda',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey,
+                                ),
+                              ),
+
+                              const SizedBox(height: 8),
+
+                              Text(
+                                _hasActiveFilters
+                                    ? 'Tente alterar os filtros'
+                                    : 'Toque no + para adicionar',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                        itemCount: transactions.length,
+                        itemBuilder: (context, index) {
+                          final transaction = transactions[index];
+                          return _TransactionCard(
+                            transaction: transaction,
+                            onDelete: () => _confirmDelete(
+                              context,
+                              transactionProvider,
+                              transaction,
+                            ),
+                            onEdit: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => TransactionFormScreen(
+                                    transaction: transaction,
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -105,6 +216,115 @@ class TransactionsScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildFilterBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          _FilterChip(
+            label: _selectedType == null
+                ? 'Tipo'
+                : _selectedType == 'income'
+                ? 'Receitas'
+                : 'Despesas',
+            isActive: _selectedType != null,
+            onTap: () => _showTypeFilter(),
+          ),
+
+          const SizedBox(width: 8),
+
+          _FilterChip(
+            label: _selectedCategory ?? 'Categoria',
+            isActive: _selectedCategory != null,
+            onTap: () => _showCategoryFilter(),
+          ),
+
+          const SizedBox(width: 8),
+
+          _FilterChip(
+            label: _formatDateRange(),
+            isActive: _startDate != null,
+            onTap: _selectDateRange,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTypeFilter() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Todos'),
+              leading: const Icon(Icons.swap_vert),
+              selected: _selectedType == null,
+              onTap: () {
+                setState(() => _selectedType = null);
+                Navigator.pop(context);
+              },
+            ),
+
+            ListTile(
+              title: const Text('Receitas'),
+              leading: const Icon(Icons.arrow_upward, color: Colors.green),
+              selected: _selectedType == 'income',
+              onTap: () {
+                setState(() => _selectedType = 'income');
+                Navigator.pop(context);
+              },
+            ),
+
+            ListTile(
+              title: const Text('Despesas'),
+              leading: const Icon(Icons.arrow_downward, color: Colors.red),
+              selected: _selectedType == 'expense',
+              onTap: () {
+                setState(() => _selectedType = 'expense');
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCategoryFilter() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(
+              title: const Text('Todas'),
+              leading: const Icon(Icons.category),
+              selected: _selectedCategory == null,
+              onTap: () {
+                setState(() => _selectedCategory = null);
+                Navigator.pop(context);
+              },
+            ),
+            ...TransactionCategory.all.map(
+              (category) => ListTile(
+                title: Text(category.label),
+                selected: _selectedCategory == category.label,
+                onTap: () {
+                  setState(() => _selectedCategory = category.label);
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _confirmDelete(
     BuildContext context,
     TransactionProvider provider,
@@ -112,17 +332,16 @@ class TransactionsScreen extends StatelessWidget {
   ) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Excluir transação'),
         content: Text('Deseja excluir "${transaction.description}"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
           TextButton(
-            onPressed: () =>
-                _handleDeleteConfirmed(context, provider, transaction),
+            onPressed: () => _handleDeleteConfirmed(ctx, provider, transaction),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Excluir'),
           ),
@@ -132,15 +351,15 @@ class TransactionsScreen extends StatelessWidget {
   }
 
   Future<void> _handleDeleteConfirmed(
-    BuildContext context,
+    BuildContext ctx,
     TransactionProvider provider,
     models.Transaction transaction,
   ) async {
-    Navigator.pop(context);
+    Navigator.pop(ctx);
 
     final success = await provider.deleteTransaction(transaction.id!);
 
-    if (context.mounted && !success) {
+    if (mounted && !success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(provider.errorMessage ?? 'Erro ao excluir'),
@@ -149,14 +368,64 @@ class TransactionsScreen extends StatelessWidget {
       );
     }
 
-    if (context.mounted && success) {
+    if (mounted && success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Transação excluída com sucesso'),
           backgroundColor: Colors.green,
         ),
       );
     }
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppTheme.primaryGreen.withValues(alpha: 0.15)
+              : Colors.white,
+          border: Border.all(
+            color: isActive ? AppTheme.primaryGreen : Colors.grey.shade400,
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? AppTheme.primaryGreen : Colors.grey.shade700,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.arrow_drop_down,
+              size: 18,
+              color: isActive ? AppTheme.primaryGreen : Colors.grey.shade600,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
