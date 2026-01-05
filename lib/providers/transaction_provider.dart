@@ -28,6 +28,54 @@ class TransactionProvider extends ChangeNotifier {
         });
   }
 
+  Stream<List<models.Transaction>> getFilteredTransactions({
+    required String userId,
+    String? type,
+    String? category,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) {
+    Query query = _transactionsRef.where('userId', isEqualTo: userId);
+
+    if (type != null) {
+      query = query.where('type', isEqualTo: type);
+    }
+
+    if (category != null) {
+      query = query.where('category', isEqualTo: category);
+    }
+
+    if (startDate != null) {
+      query = query.where(
+        'date',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(startDate),
+      );
+    }
+
+    if (endDate != null) {
+      final endOfDay = DateTime(
+        endDate.year,
+        endDate.month,
+        endDate.day,
+        23,
+        59,
+        59,
+      );
+      query = query.where(
+        'date',
+        isLessThanOrEqualTo: Timestamp.fromDate(endOfDay),
+      );
+    }
+
+    query = query.orderBy('date', descending: true);
+
+    return query.snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => models.Transaction.fromFirestore(doc))
+          .toList();
+    });
+  }
+
   Future<bool> addTransaction(models.Transaction transaction) async {
     try {
       _isLoading = true;
