@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
+import '../transactions/transactions_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -63,7 +64,10 @@ class DashboardScreen extends StatelessWidget {
               title: const Text('Transações'),
               onTap: () {
                 Navigator.pop(context);
-                // TODO: Navegar para tela de transações no futuro
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TransactionsScreen()),
+                );
               },
             ),
 
