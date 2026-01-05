@@ -78,6 +78,15 @@ class TransactionsScreen extends StatelessWidget {
                         transactionProvider,
                         transaction,
                       ),
+                      onEdit: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                TransactionFormScreen(transaction: transaction),
+                          ),
+                        );
+                      },
                     );
                   },
                 );
@@ -154,8 +163,13 @@ class TransactionsScreen extends StatelessWidget {
 class _TransactionCard extends StatelessWidget {
   final models.Transaction transaction;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
 
-  const _TransactionCard({required this.transaction, required this.onDelete});
+  const _TransactionCard({
+    required this.transaction,
+    required this.onDelete,
+    required this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -166,43 +180,47 @@ class _TransactionCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.1),
-          child: Icon(icon, color: color),
-        ),
+      child: InkWell(
+        onTap: onEdit,
+        borderRadius: BorderRadius.circular(12),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: color.withValues(alpha: 0.1),
+            child: Icon(icon, color: color),
+          ),
 
-        title: Text(
-          transaction.description,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
+          title: Text(
+            transaction.description,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
 
-        subtitle: Text(
-          '${transaction.category} • '
-          '${transaction.date.day.toString().padLeft(2, '0')}/'
-          '${transaction.date.month.toString().padLeft(2, '0')}/'
-          '${transaction.date.year}',
-          style: TextStyle(color: Colors.grey[600], fontSize: 13),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '$sign R\$ ${transaction.amount.toStringAsFixed(2)}',
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+          subtitle: Text(
+            '${transaction.category} • '
+            '${transaction.date.day.toString().padLeft(2, '0')}/'
+            '${transaction.date.month.toString().padLeft(2, '0')}/'
+            '${transaction.date.year}',
+            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$sign R\$ ${transaction.amount.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
-            ),
 
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
 
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.grey),
-              onPressed: onDelete,
-            ),
-          ],
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.grey),
+                onPressed: onDelete,
+              ),
+            ],
+          ),
         ),
       ),
     );

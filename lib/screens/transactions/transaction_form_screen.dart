@@ -9,7 +9,11 @@ import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 
 class TransactionFormScreen extends StatefulWidget {
-  const TransactionFormScreen({super.key});
+  final models.Transaction? transaction;
+
+  const TransactionFormScreen({super.key, this.transaction});
+
+  bool get isEditing => transaction != null;
 
   @override
   State<TransactionFormScreen> createState() => _TransactionFormScreenState();
@@ -46,6 +50,20 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   List<String> get _categories =>
       _transactionType == 'income' ? _incomeCategories : _expenseCategories;
+
+  @override
+  void initState() {
+    super.initState();
+    final transaction = widget.transaction;
+
+    if (transaction != null) {
+      _descriptionController.text = transaction.description;
+      _amountController.text = transaction.amount.toStringAsFixed(2);
+      _transactionType = transaction.type;
+      _selectedCategory = transaction.category;
+      _selectedDate = transaction.date;
+    }
+  }
 
   @override
   void dispose() {
@@ -103,17 +121,30 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final cleanAmount = _amountController.text.replaceAll(',', '.');
     final amount = double.parse(cleanAmount);
 
-    final transaction = models.Transaction(
-      userId: userId,
-      description: _descriptionController.text.trim(),
-      amount: amount,
-      type: _transactionType,
-      category: _selectedCategory,
-      date: _selectedDate,
-    );
-
     final transactionProvider = context.read<TransactionProvider>();
-    final success = await transactionProvider.addTransaction(transaction);
+    bool success;
+
+    if (widget.isEditing) {
+      final updated = widget.transaction!.copyWith(
+        description: _descriptionController.text.trim(),
+        amount: amount,
+        type: _transactionType,
+        category: _selectedCategory,
+        date: _selectedDate,
+      );
+
+      success = await transactionProvider.updateTransaction(updated);
+    } else {
+      final transaction = models.Transaction(
+        userId: userId,
+        description: _descriptionController.text.trim(),
+        amount: amount,
+        type: _transactionType,
+        category: _selectedCategory,
+        date: _selectedDate,
+      );
+      success = await transactionProvider.addTransaction(transaction);
+    }
 
     if (!mounted) return;
 
@@ -121,8 +152,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Transação salva com sucesso!'),
+        SnackBar(
+          content: Text(
+            widget.isEditing
+                ? 'Transação atualizada com sucesso!'
+                : 'Transação salva com sucesso!',
+          ),
           backgroundColor: AppTheme.primaryGreen,
         ),
       );
@@ -164,7 +199,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nova Transação'),
+        title: Text(widget.isEditing ? 'Editar Transação' : 'Nova Transação'),
         backgroundColor: AppTheme.primaryGreen,
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -319,7 +354,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 const SizedBox(height: 16),
 
                 CustomButton(
-                  text: 'Salvar Transação',
+                  text: widget.isEditing ? 'Atualizar' : 'Salvar Transação',
                   onPressed: _handleSave,
                   isLoading: _isLoading,
                 ),
