@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
+import '../../extensions/transaction_extensions.dart';
+import '../../models/transaction.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/transaction_provider.dart';
+import '../../widgets/dashboard/balance_card.dart';
+import '../../widgets/dashboard/category_pie_chart.dart';
+import '../../widgets/dashboard/monthly_bar_chart.dart';
 import '../transactions/transactions_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -96,29 +102,99 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Bem-vindo, ${user?.displayName ?? 'Usuário'}!',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+      body: _buildDashboardBody(context),
+    );
+  }
+
+  Widget _buildDashboardBody(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final transactionProvider = context.watch<TransactionProvider>();
+    final userId = authProvider.user?.uid;
+
+    if (userId == null) {
+      return const Center(child: Text('Usuário não autenticado'));
+    }
+
+    return StreamBuilder<List<Transaction>>(
+      stream: transactionProvider.getTransactions(userId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppTheme.primaryGreen),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Erro: ${snapshot.error}'));
+        }
+
+        final transactions = snapshot.data ?? [];
+
+        if (transactions.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bar_chart, size: 80, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'Nenhuma transação encontrada',
+                  style: TextStyle(fontSize: 18, color: Colors.grey[600]),
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Email: ${user?.email ?? '---'}',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  'Adicione transações para ver os gráficos',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final summary = transactions.summary;
+        final categoryData = transactions.categoryBreakdown;
+        final monthlyData = transactions.monthlyBreakdown;
+
+        return RefreshIndicator(
+          color: AppTheme.primaryGreen,
+          onRefresh: () async {},
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                BalanceCard(
+                  balance: summary['balance']!,
+                  income: summary['income']!,
+                  expense: summary['expense']!,
+                ),
+
+                const SizedBox(height: 24),
+
+                if (categoryData.isNotEmpty) ...[
+                  const Text(
+                    'Despesas por Categoria',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  CategoryPieChart(data: categoryData),
+                  const SizedBox(height: 24),
+                ],
+
+                const Text(
+                  'Evolução Mensal',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                MonthlyBarChart(data: monthlyData),
+
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

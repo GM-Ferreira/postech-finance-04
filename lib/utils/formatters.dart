@@ -6,12 +6,21 @@ class Formatters {
     symbol: 'R\$',
   );
 
+  static final _compactCurrency = NumberFormat.compactCurrency(
+    locale: 'pt_BR',
+    symbol: 'R\$',
+  );
+
   static final _date = DateFormat('dd/MM/yyyy', 'pt_BR');
 
   static final _dateExtended = DateFormat("d 'de' MMMM 'de' yyyy", 'pt_BR');
 
   static String currency(double value) {
     return _currency.format(value);
+  }
+
+  static String compactCurrency(double value) {
+    return _compactCurrency.format(value);
   }
 
   static String date(DateTime date) {

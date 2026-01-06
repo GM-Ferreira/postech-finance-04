@@ -8,6 +8,8 @@ class AppTheme {
   static const Color textDark = Color(0xFF333333);
   static const Color textGray = Color(0xFF757575);
   static const Color inputBorder = Color(0xFFE0E0E0);
+  static const Color incomeGreen = Color(0xFF4CAF50);
+  static const Color expenseRed = Color(0xFFF44336);
 
   static ThemeData get theme {
     return ThemeData(
