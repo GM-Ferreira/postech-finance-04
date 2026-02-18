@@ -1,6 +1,6 @@
-# Postech Finance 03
+# Postech Finance 04
 
-Aplicativo mobile de controle financeiro pessoal desenvolvido em Flutter para dispositivos Android como parte do Tech Challenge 3 da Pós-Tech FIAP.
+Aplicativo mobile de controle financeiro pessoal desenvolvido em Flutter para dispositivos Android como parte do Tech Challenge 4 da Pós-Tech FIAP.
 
 ## Sobre o Projeto
 
@@ -9,7 +9,7 @@ O Postech Finance é um aplicativo de gestão financeira que permite aos usuári
 - Visualizar dashboard com resumo financeiro (receitas, despesas e saldo)
 - Cadastrar transações financeiras (receitas e despesas)
 - Acompanhar gráficos e estatísticas financeiras
-- Autenticação segura de usuários
+- Autenticação segura com verificação de email e TOTP (MFA)
 - Gerenciamento de perfil com foto
 - Interface otimizada para Android
 
@@ -20,9 +20,15 @@ O Postech Finance é um aplicativo de gestão financeira que permite aos usuári
 - **Firebase Auth** - Autenticação de usuários
 - **Cloud Firestore** - Banco de dados NoSQL em tempo real
 - **Firebase Storage** - Armazenamento de comprovantes de transações
+- **Firebase Crashlytics** - Monitoramento de crashes em produção
+- **Firebase Performance** - Métricas de performance do app
 - **Provider** - Gerenciamento de estado
 - **FL Chart** - Gráficos e visualizações
 - **Image Picker** - Seleção de imagens da galeria/câmera
+- **Cached Network Image** - Cache de imagens para performance
+- **OTP** - Geração e validação de códigos TOTP
+- **QR Flutter** - Geração de QR Codes para setup de TOTP
+- **Flutter Secure Storage** - Armazenamento seguro de secrets
 
 ## Pré-requisitos
 
@@ -115,32 +121,69 @@ Este projeto foi desenvolvido e testado especificamente para **Android**. Outras
 
 ```
 lib/
-├── app.dart                    # Configuração principal do app
-├── main.dart                   # Ponto de entrada
+├── app.dart                    # Configuração principal + AuthWrapper + DI (Composition Root)
+├── main.dart                   # Ponto de entrada + Crashlytics setup
 ├── firebase_options.dart       # Configurações do Firebase
 ├── config/
 │   └── app_theme.dart         # Tema e estilos
-├── models/                    # Modelos de dados
+├── extensions/
+│   └── transaction_extensions.dart  # Extensions para Transaction
+├── models/                    # Modelos de domínio (puros, sem dependência Firebase)
+│   ├── app_user.dart          # Modelo de usuário autenticado
+│   ├── auth_exception.dart    # Exceção de domínio para autenticação
+│   └── transaction.dart       # Modelo de transação financeira
 ├── providers/                 # Gerenciadores de estado (Provider)
-│   ├── auth_provider.dart
+│   ├── auth_provider.dart     # Estado de autenticação + TOTP + Observabilidade
 │   └── transaction_provider.dart
+├── repositories/              # Camada de dados (interfaces + implementações)
+│   ├── i_auth_repository.dart       # Interface de autenticação
+│   ├── auth_repository.dart         # Implementação Firebase Auth
+│   ├── i_totp_repository.dart       # Interface TOTP
+│   ├── totp_repository.dart         # Implementação TOTP (OTP + SecureStorage + Firestore)
+│   ├── i_storage_repository.dart    # Interface de storage
+│   ├── storage_repository.dart      # Implementação Firebase Storage
+│   └── transaction_repository.dart  # Repositório de transações
 ├── screens/                   # Telas do aplicativo
-│   ├── auth/                 # Telas de autenticação
+│   ├── auth/                 # Autenticação
+│   │   ├── login_screen.dart
+│   │   ├── register_screen.dart
+│   │   ├── email_verification_screen.dart  # Verificação de email obrigatória
+│   │   ├── totp_setup_screen.dart          # QR Code + ativação TOTP
+│   │   └── totp_verification_screen.dart   # Verificação de código TOTP no login
 │   ├── home/                 # Dashboard
-│   ├── profile/              # Perfil do usuário
+│   ├── profile/              # Perfil do usuário + toggle 2FA
 │   └── transactions/         # Transações financeiras
-├── services/                  # Serviços (Firebase Storage)
+├── services/                  # Serviços
+│   ├── i_image_picker_service.dart    # Interface de seleção de imagens
+│   ├── image_picker_service.dart      # Implementação Image Picker
+│   └── observability_service.dart     # Crashlytics + Performance centralizado
 ├── utils/                     # Utilitários e helpers
+│   └── validators.dart        # Validações (email, senha forte)
 └── widgets/                   # Componentes reutilizáveis
+    ├── common/
+    │   ├── app_drawer.dart              # Drawer global (navegação em todas as telas)
+    │   ├── password_strength_indicator.dart  # Indicador visual de força de senha
+    │   ├── custom_button.dart
+    │   ├── custom_text_field.dart
+    │   └── receipt_viewer.dart          # Viewer de comprovantes com cache
+    └── dashboard/
+        ├── balance_card.dart
+        ├── category_pie_chart.dart
+        └── monthly_bar_chart.dart
 ```
 
 ## Segurança
 
 O projeto implementa:
 
+- **Senha forte obrigatória** — mínimo 8 caracteres, maiúscula, minúscula, número e símbolo, com indicador visual em tempo real
+- **Verificação de email obrigatória** — conta só é ativada após confirmar o email
+- **TOTP (MFA)** — autenticação em dois fatores via Google Authenticator/Authy, configurável no perfil
+- **Proteção contra bypass de TOTP** — verificação persiste mesmo após minimizar/fechar o app
 - Autenticação Firebase para garantir acesso seguro
 - Firebase Security Rules configuradas para acesso baseado em `userId`
 - Cada usuário só pode visualizar e modificar seus próprios dados
+- Secrets TOTP armazenados no Flutter Secure Storage (não no Firestore)
 - Credenciais Firebase separadas do código-fonte
 
 ## Funcionalidades Principais
@@ -148,7 +191,9 @@ O projeto implementa:
 ### Autenticação
 
 - Login com email e senha
-- Cadastro de novos usuários
+- Cadastro com validação de senha forte + indicador visual
+- Verificação de email obrigatória
+- TOTP (2FA) — ativação via QR Code, verificação no login
 - Logout seguro
 
 ### Dashboard
@@ -162,11 +207,28 @@ O projeto implementa:
 - Cadastro de receitas e despesas
 - Categorização de transações
 - Histórico completo de movimentações
+- Comprovantes com cache de imagens
 
 ### Perfil
 
 - Visualização dos dados do usuário
 - Edição de dados do perfil e troca de senha
+- Ativar/desativar autenticação em dois fatores (TOTP)
+
+### Observabilidade
+
+- Firebase Crashlytics — monitoramento de crashes e erros em produção
+- Firebase Performance — métricas de tempo de inicialização, traces customizados e rede
+
+## Arquitetura
+
+O projeto segue princípios de **Clean Architecture**:
+
+- **Models** — modelos de domínio puros, sem dependência de Firebase
+- **Repositories** — interfaces abstratas (ex: `IAuthRepository`) com implementações concretas (ex: `AuthRepository`)
+- **Providers** — gerenciadores de estado que dependem apenas das interfaces
+- **Composition Root** — injeção de dependências centralizada no `app.dart` via `MultiProvider`
+- **dart analyze** — 0 issues
 
 ## Suporte
 
@@ -178,7 +240,7 @@ Em caso de dúvidas ou problemas durante a configuração, verifique:
 
 ## Desenvolvimento
 
-Desenvolvido como parte do Tech Challenge 3 - Pós-Tech FIAP
+Desenvolvido como parte do Tech Challenge 4 - Pós-Tech FIAP
 
 ---
 
