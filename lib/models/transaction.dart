@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'transaction_type.dart';
 
 const _undefined = Object();
@@ -26,33 +24,34 @@ class Transaction {
     this.receiptUrl,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
-
-  factory Transaction.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-
+  factory Transaction.fromMap(Map<String, dynamic> data, {String? id}) {
     return Transaction(
-      id: doc.id,
+      id: id,
       userId: data['userId'] ?? '',
       description: data['description'] ?? '',
       amount: (data['amount'] ?? 0).toDouble(),
       type: TransactionType.fromValue(data['type'] ?? 'expense'),
       category: data['category'] ?? 'Outros',
-      date: (data['date'] as Timestamp).toDate(),
+      date: data['date'] is DateTime
+          ? data['date'] as DateTime
+          : DateTime.parse(data['date'].toString()),
       receiptUrl: data['receiptUrl'],
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: data['createdAt'] is DateTime
+          ? data['createdAt'] as DateTime
+          : DateTime.now(),
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toMap() {
     return {
       'userId': userId,
       'description': description,
       'amount': amount,
       'type': type.value,
       'category': category,
-      'date': Timestamp.fromDate(date),
+      'date': date,
       'receiptUrl': receiptUrl,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt,
     };
   }
 

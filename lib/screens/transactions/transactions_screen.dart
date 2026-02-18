@@ -6,6 +6,7 @@ import '../../models/category.dart';
 import '../../models/transaction.dart' as models;
 import '../../providers/auth_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../widgets/common/app_drawer.dart';
 import '../../widgets/common/custom_filter_chip.dart';
 import '../../widgets/common/receipt_viewer.dart';
 import '../../widgets/transactions/transaction_card.dart';
@@ -89,6 +90,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         backgroundColor: AppTheme.primaryGreen,
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         actions: [
           if (_hasActiveFilters)
             IconButton(
@@ -98,6 +105,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             ),
         ],
       ),
+      drawer: const AppDrawer(currentPage: DrawerPage.transactions),
       body: userId == null
           ? const Center(child: Text('Usuário não autenticado'))
           : Column(

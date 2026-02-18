@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/app_theme.dart';
@@ -30,42 +31,34 @@ class ReceiptViewer {
               maxScale: 4.0,
               child: file != null
                   ? Image.file(file, fit: BoxFit.contain)
-                  : Image.network(
-                      url!,
+                  : CachedNetworkImage(
+                      imageUrl: url!,
                       fit: BoxFit.contain,
-                      frameBuilder:
-                          (context, child, frame, wasSynchronouslyLoaded) {
-                            if (wasSynchronouslyLoaded || frame != null) {
-                              return child;
-                            }
-                            return SizedBox(
-                              height: 300,
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: AppTheme.primaryGreen,
-                                ),
-                              ),
-                            );
-                          },
-                      errorBuilder: (context, error, stackTrace) {
-                        return const SizedBox(
-                          height: 200,
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.error_outline,
-                                  size: 48,
-                                  color: Colors.red,
-                                ),
-                                SizedBox(height: 8),
-                                Text('Erro ao carregar imagem'),
-                              ],
-                            ),
+                      placeholder: (context, url) => const SizedBox(
+                        height: 300,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primaryGreen,
                           ),
-                        );
-                      },
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => const SizedBox(
+                        height: 200,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                size: 48,
+                                color: Colors.red,
+                              ),
+                              SizedBox(height: 8),
+                              Text('Erro ao carregar imagem'),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
             ),
           ],

@@ -1,7 +1,7 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
@@ -10,7 +10,8 @@ import '../../models/transaction.dart' as models;
 import '../../models/transaction_type.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/transaction_provider.dart';
-import '../../services/storage_service.dart';
+import '../../repositories/i_storage_repository.dart';
+import '../../services/i_image_picker_service.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/receipt_viewer.dart';
@@ -37,7 +38,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
 
-  final StorageService _storageService = StorageService();
   File? _selectedImage;
   String? _existingReceiptUrl;
   bool _removeExistingReceipt = false;
@@ -99,6 +99,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     final authProvider = context.read<AuthProvider>();
     final transactionProvider = context.read<TransactionProvider>();
+    final storageRepository = context.read<IStorageRepository>();
     final userId = authProvider.user?.uid;
 
     if (userId == null) {
@@ -125,19 +126,19 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             widget.transaction?.id ??
             DateTime.now().millisecondsSinceEpoch.toString();
 
-        receiptUrl = await _storageService.uploadReceipt(
+        receiptUrl = await storageRepository.uploadReceipt(
           file: _selectedImage!,
           userId: userId,
           transactionId: transactionId,
         );
 
         if (_existingReceiptUrl != null) {
-          await _storageService.deleteReceipt(_existingReceiptUrl!);
+          await storageRepository.deleteReceipt(_existingReceiptUrl!);
         }
       }
 
       if (_removeExistingReceipt && _existingReceiptUrl != null) {
-        await _storageService.deleteReceipt(_existingReceiptUrl!);
+        await storageRepository.deleteReceipt(_existingReceiptUrl!);
         receiptUrl = null;
       }
     } catch (e) {
@@ -258,7 +259,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               title: const Text('Tirar foto'),
               onTap: () {
                 Navigator.pop(context);
-                _pickImage(ImageSource.camera);
+                _pickImage(ImagePickerSource.camera);
               },
             ),
             ListTile(
@@ -266,7 +267,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               title: const Text('Escolher da galeria'),
               onTap: () {
                 Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
+                _pickImage(ImagePickerSource.gallery);
               },
             ),
             if (hasImage)
@@ -287,9 +288,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     );
   }
 
-  Future<void> _pickImage(ImageSource source) async {
+  Future<void> _pickImage(ImagePickerSource source) async {
     try {
-      final image = await _storageService.pickImage(source: source);
+      final imagePickerService = context.read<IImagePickerService>();
+      final image = await imagePickerService.pickImage(source: source);
 
       if (!mounted) return;
 
@@ -353,9 +355,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       children: [
                         hasNewImage
                             ? Image.file(_selectedImage!, fit: BoxFit.cover)
-                            : Image.network(
-                                _existingReceiptUrl!,
+                            : CachedNetworkImage(
+                                imageUrl: _existingReceiptUrl!,
                                 fit: BoxFit.cover,
+                                placeholder: (context, url) => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                                errorWidget: (context, url, error) =>
+                                    const Icon(Icons.error_outline),
                               ),
                         Positioned(
                           top: 8,

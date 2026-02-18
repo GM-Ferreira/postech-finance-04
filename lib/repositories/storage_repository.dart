@@ -2,30 +2,16 @@ import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
-import 'package:image_picker/image_picker.dart';
 
-class StorageService {
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  final ImagePicker _picker = ImagePicker();
+import 'i_storage_repository.dart';
 
-  Future<File?> pickImage({required ImageSource source}) async {
-    try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 80,
-      );
+class StorageRepository implements IStorageRepository {
+  final FirebaseStorage _storage;
 
-      if (pickedFile != null) {
-        return File(pickedFile.path);
-      }
-      return null;
-    } catch (e) {
-      throw Exception('Erro ao selecionar imagem: $e');
-    }
-  }
+  StorageRepository({FirebaseStorage? storage})
+    : _storage = storage ?? FirebaseStorage.instance;
 
+  @override
   Future<String> uploadReceipt({
     required File file,
     required String userId,
@@ -51,6 +37,7 @@ class StorageService {
     }
   }
 
+  @override
   Future<void> deleteReceipt(String url) async {
     try {
       final Reference ref = _storage.refFromURL(url);

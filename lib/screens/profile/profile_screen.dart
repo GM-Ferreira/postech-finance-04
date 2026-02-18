@@ -1,13 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../app.dart';
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../repositories/i_totp_repository.dart';
 import '../../utils/dialogs.dart';
+import '../../widgets/common/app_drawer.dart';
 import '../../utils/formatters.dart';
+import '../auth/totp_setup_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool? _totpEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTotpStatus();
+  }
+
+  Future<void> _loadTotpStatus() async {
+    final authProvider = context.read<AuthProvider>();
+    final totpRepo = context.read<ITotpRepository>();
+    final userId = authProvider.user?.uid;
+    if (userId == null) return;
+
+    try {
+      final enabled = await totpRepo.isEnabled(userId);
+      if (mounted) {
+        setState(() => _totpEnabled = enabled);
+      }
+    } catch (e) {
+      debugPrint('Failed to load TOTP status: $e');
+      if (mounted) {
+        setState(() => _totpEnabled = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +56,14 @@ class ProfileScreen extends StatelessWidget {
         backgroundColor: AppTheme.primaryGreen,
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
       ),
+      drawer: const AppDrawer(currentPage: DrawerPage.profile),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -123,6 +166,101 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
 
+            const SizedBox(height: 24),
+
+            // TOTP 2FA Card
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.security,
+                          color: AppTheme.primaryGreen,
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Autenticação em dois fatores',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'TOTP via app autenticador',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textGray,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_totpEnabled == null)
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _totpEnabled!
+                                  ? Colors.green.shade50
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _totpEnabled! ? 'Ativado' : 'Desativado',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _totpEnabled!
+                                    ? Colors.green
+                                    : AppTheme.textGray,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: _totpEnabled == true
+                          ? OutlinedButton(
+                              onPressed: () => _handleDisableTotp(context),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                                side: const BorderSide(color: Colors.red),
+                              ),
+                              child: const Text('Desativar'),
+                            )
+                          : ElevatedButton(
+                              onPressed: () => _handleEnableTotp(context),
+                              child: const Text('Ativar'),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             const SizedBox(height: 32),
 
             SizedBox(
@@ -131,8 +269,12 @@ class ProfileScreen extends StatelessWidget {
                 onPressed: () async {
                   if (await AppDialogs.confirmLogout(context)) {
                     if (!context.mounted) return;
-                    context.read<AuthProvider>().logout();
-                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    await context.read<AuthProvider>().logout();
+                    if (!context.mounted) return;
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const AuthWrapper()),
+                      (route) => false,
+                    );
                   }
                 },
                 icon: const Icon(Icons.exit_to_app, color: Colors.red),
@@ -146,6 +288,59 @@ class ProfileScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _handleEnableTotp(BuildContext context) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const TotpSetupScreen()),
+    );
+
+    if (result == true && mounted) {
+      setState(() => _totpEnabled = true);
+    }
+  }
+
+  Future<void> _handleDisableTotp(BuildContext ctx) async {
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (context) => AlertDialog(
+        title: const Text('Desativar 2FA'),
+        content: const Text(
+          'Tem certeza que deseja desativar a autenticação em dois fatores? '
+          'Sua conta ficará menos segura.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Desativar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final authProvider = context.read<AuthProvider>();
+    final totpRepo = context.read<ITotpRepository>();
+    final userId = authProvider.user?.uid;
+    if (userId == null) return;
+
+    await totpRepo.disable(userId);
+
+    if (!mounted) return;
+    setState(() => _totpEnabled = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Autenticação em dois fatores desativada.'),
+        backgroundColor: Colors.orange,
       ),
     );
   }

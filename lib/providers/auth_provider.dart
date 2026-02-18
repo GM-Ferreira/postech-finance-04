@@ -1,47 +1,113 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-class AuthProvider extends ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+import '../models/app_user.dart';
+import '../models/auth_exception.dart';
+import '../repositories/i_auth_repository.dart';
+import '../repositories/i_totp_repository.dart';
+import '../services/observability_service.dart';
 
-  User? _user;
+class AuthProvider extends ChangeNotifier {
+  final IAuthRepository _repository;
+  final ITotpRepository _totpRepository;
+
+  AppUser? _user;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _pendingTotpVerification = false;
+  bool _isLoggingIn = false;
+  bool _totpVerifiedThisSession = false;
 
-  User? get user => _user;
+  AppUser? get user => _user;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _user != null;
+  bool get pendingTotpVerification => _pendingTotpVerification;
   String? get errorMessage => _errorMessage;
 
-  AuthProvider() {
-    _auth.authStateChanges().listen((User? user) {
+  AuthProvider({
+    required IAuthRepository repository,
+    required ITotpRepository totpRepository,
+  }) : _repository = repository,
+       _totpRepository = totpRepository {
+    _repository.authStateChanges.listen((AppUser? user) async {
       _user = user;
-      notifyListeners();
+
+      // Identify user in Crashlytics
+      if (user != null) {
+        ObservabilityService.setUser(user.uid);
+      } else {
+        ObservabilityService.clearUser();
+      }
+
+      // Cold start / app recreated: check if TOTP is needed
+      if (!_isLoggingIn && user != null && !_totpVerifiedThisSession) {
+        try {
+          final totpEnabled = await _totpRepository.isEnabled(user.uid);
+          if (totpEnabled) {
+            _pendingTotpVerification = true;
+          }
+        } catch (e) {
+          debugPrint('TOTP cold-start check failed: $e');
+        }
+      }
+
+      if (!_isLoggingIn) {
+        notifyListeners();
+      }
     });
   }
 
   Future<bool> login(String email, String password) async {
+    final trace = await ObservabilityService.startTrace('login');
     try {
       _isLoading = true;
       _errorMessage = null;
+      _pendingTotpVerification = false;
+      _totpVerifiedThisSession = false;
+      _isLoggingIn = true;
       notifyListeners();
 
-      await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+      await _repository.signIn(email: email, password: password);
 
+      _user = _repository.currentUser;
+
+      if (_user != null) {
+        try {
+          final totpEnabled = await _totpRepository.isEnabled(_user!.uid);
+          if (totpEnabled) {
+            _pendingTotpVerification = true;
+          }
+        } catch (e) {
+          debugPrint('TOTP check failed: $e');
+        }
+      }
+
+      _isLoggingIn = false;
       _isLoading = false;
+      await ObservabilityService.stopTrace(trace);
       notifyListeners();
       return true;
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
+      _isLoggingIn = false;
       _isLoading = false;
-      _errorMessage = _getErrorMessage(e.code);
+      _errorMessage = e.message;
+      await ObservabilityService.stopTrace(trace);
+      ObservabilityService.recordError(
+        e,
+        StackTrace.current,
+        reason: 'login_auth_error',
+      );
       notifyListeners();
       return false;
     } catch (e) {
+      _isLoggingIn = false;
       _isLoading = false;
       _errorMessage = 'Erro ao fazer login. Tente novamente.';
+      await ObservabilityService.stopTrace(trace);
+      ObservabilityService.recordError(
+        e,
+        StackTrace.current,
+        reason: 'login_unknown_error',
+      );
       notifyListeners();
       return false;
     }
@@ -53,21 +119,21 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+      await _repository.register(email: email, password: password);
 
       if (name != null && name.isNotEmpty) {
-        await credential.user?.updateDisplayName(name);
+        await _repository.updateDisplayName(name);
+        _user = _repository.currentUser;
       }
+
+      await _repository.sendEmailVerification();
 
       _isLoading = false;
       notifyListeners();
       return true;
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       _isLoading = false;
-      _errorMessage = _getErrorMessage(e.code);
+      _errorMessage = e.message;
       notifyListeners();
       return false;
     } catch (e) {
@@ -79,8 +145,11 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await _auth.signOut();
+    await _repository.signOut();
     _user = null;
+    _pendingTotpVerification = false;
+    _totpVerifiedThisSession = false;
+    ObservabilityService.clearUser();
     notifyListeners();
   }
 
@@ -90,13 +159,17 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      await _user?.updateDisplayName(name.trim());
-      await _user?.reload();
-      _user = _auth.currentUser;
+      await _repository.updateDisplayName(name);
+      _user = _repository.currentUser;
 
       _isLoading = false;
       notifyListeners();
       return true;
+    } on AuthException catch (e) {
+      _isLoading = false;
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
     } catch (e) {
       _isLoading = false;
       _errorMessage = 'Erro ao atualizar nome.';
@@ -114,21 +187,15 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      final credential = EmailAuthProvider.credential(
-        email: _user!.email!,
-        password: currentPassword,
-      );
-
-      await _user!.reauthenticateWithCredential(credential);
-
-      await _user!.updatePassword(newPassword);
+      await _repository.reauthenticate(currentPassword);
+      await _repository.updatePassword(newPassword);
 
       _isLoading = false;
       notifyListeners();
       return true;
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       _isLoading = false;
-      _errorMessage = _getErrorMessage(e.code);
+      _errorMessage = e.message;
       notifyListeners();
       return false;
     } catch (e) {
@@ -139,24 +206,49 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  String _getErrorMessage(String code) {
-    switch (code) {
-      case 'user-not-found':
-        return 'Usuário não encontrado.';
-      case 'wrong-password':
-        return 'Senha incorreta.';
-      case 'invalid-email':
-        return 'Email inválido.';
-      case 'user-disabled':
-        return 'Usuário desabilitado.';
-      case 'email-already-in-use':
-        return 'Este email já está em uso.';
-      case 'weak-password':
-        return 'A senha é muito fraca.';
-      case 'invalid-credential':
-        return 'Email ou senha incorretos.';
-      default:
-        return 'Erro de autenticação. Tente novamente.';
+  Future<bool> sendVerificationEmail() async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      await _repository.sendEmailVerification();
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } on AuthException catch (e) {
+      _isLoading = false;
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'Erro ao enviar email de verificação.';
+      notifyListeners();
+      return false;
     }
+  }
+
+  Future<bool> refreshUser() async {
+    try {
+      await _repository.reloadUser();
+      _user = _repository.currentUser;
+      notifyListeners();
+      return _user?.emailVerified ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  void markPendingTotp() {
+    _pendingTotpVerification = true;
+    notifyListeners();
+  }
+
+  void completeTotpVerification() {
+    _pendingTotpVerification = false;
+    _totpVerifiedThisSession = true;
+    notifyListeners();
   }
 }

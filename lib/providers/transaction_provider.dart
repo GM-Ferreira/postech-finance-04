@@ -1,11 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../models/transaction.dart' as models;
+import '../repositories/i_transaction_repository.dart';
 
 class TransactionProvider extends ChangeNotifier {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String _collection = 'transactions';
+  final ITransactionRepository _repository;
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -13,19 +12,11 @@ class TransactionProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  CollectionReference get _transactionsRef =>
-      _firestore.collection(_collection);
+  TransactionProvider({required ITransactionRepository repository})
+    : _repository = repository;
 
   Stream<List<models.Transaction>> getTransactions(String userId) {
-    return _transactionsRef
-        .where('userId', isEqualTo: userId)
-        .orderBy('date', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => models.Transaction.fromFirestore(doc))
-              .toList();
-        });
+    return _repository.getTransactions(userId);
   }
 
   Stream<List<models.Transaction>> getFilteredTransactions({
@@ -35,45 +26,13 @@ class TransactionProvider extends ChangeNotifier {
     DateTime? startDate,
     DateTime? endDate,
   }) {
-    Query query = _transactionsRef.where('userId', isEqualTo: userId);
-
-    if (type != null) {
-      query = query.where('type', isEqualTo: type);
-    }
-
-    if (category != null) {
-      query = query.where('category', isEqualTo: category);
-    }
-
-    if (startDate != null) {
-      query = query.where(
-        'date',
-        isGreaterThanOrEqualTo: Timestamp.fromDate(startDate),
-      );
-    }
-
-    if (endDate != null) {
-      final endOfDay = DateTime(
-        endDate.year,
-        endDate.month,
-        endDate.day,
-        23,
-        59,
-        59,
-      );
-      query = query.where(
-        'date',
-        isLessThanOrEqualTo: Timestamp.fromDate(endOfDay),
-      );
-    }
-
-    query = query.orderBy('date', descending: true);
-
-    return query.snapshots().map((snapshot) {
-      return snapshot.docs
-          .map((doc) => models.Transaction.fromFirestore(doc))
-          .toList();
-    });
+    return _repository.getFilteredTransactions(
+      userId: userId,
+      type: type,
+      category: category,
+      startDate: startDate,
+      endDate: endDate,
+    );
   }
 
   Future<bool> addTransaction(models.Transaction transaction) async {
@@ -82,7 +41,7 @@ class TransactionProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      await _transactionsRef.add(transaction.toFirestore());
+      await _repository.addTransaction(transaction);
 
       _isLoading = false;
       notifyListeners();
@@ -96,20 +55,12 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   Future<bool> updateTransaction(models.Transaction transaction) async {
-    if (transaction.id == null) {
-      _errorMessage = 'ID da transação não encontrado';
-      notifyListeners();
-      return false;
-    }
-
     try {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
 
-      await _transactionsRef
-          .doc(transaction.id)
-          .update(transaction.toFirestore());
+      await _repository.updateTransaction(transaction);
 
       _isLoading = false;
       notifyListeners();
@@ -128,7 +79,7 @@ class TransactionProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      await _transactionsRef.doc(transactionId).delete();
+      await _repository.deleteTransaction(transactionId);
 
       _isLoading = false;
       notifyListeners();
@@ -143,12 +94,7 @@ class TransactionProvider extends ChangeNotifier {
 
   Future<models.Transaction?> getTransactionById(String transactionId) async {
     try {
-      final doc = await _transactionsRef.doc(transactionId).get();
-
-      if (doc.exists) {
-        return models.Transaction.fromFirestore(doc);
-      }
-      return null;
+      return await _repository.getTransactionById(transactionId);
     } catch (e) {
       _errorMessage = 'Erro ao buscar transação: $e';
       notifyListeners();

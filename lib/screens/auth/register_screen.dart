@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../utils/validators.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/common/password_strength_indicator.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -144,7 +145,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   CustomTextField(
                     label: 'Senha',
-                    hintText: 'Mínimo 6 caracteres',
+                    hintText: 'Crie uma senha forte',
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     enabled: !authProvider.isLoading,
@@ -162,6 +163,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       },
                     ),
                     validator: Validators.password,
+                    onChanged: (_) => setState(() {}),
+                  ),
+
+                  PasswordStrengthIndicator(
+                    password: _passwordController.text,
                   ),
 
                   const SizedBox(height: 16),

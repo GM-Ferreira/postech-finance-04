@@ -1,3 +1,4 @@
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,22 +7,16 @@ import '../../extensions/transaction_extensions.dart';
 import '../../models/transaction.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/transaction_provider.dart';
-import '../../utils/dialogs.dart';
-import '../../utils/formatters.dart';
+import '../../widgets/common/app_drawer.dart';
 import '../../widgets/dashboard/balance_card.dart';
 import '../../widgets/dashboard/category_pie_chart.dart';
 import '../../widgets/dashboard/monthly_bar_chart.dart';
-import '../profile/profile_screen.dart';
-import '../transactions/transactions_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-    final user = authProvider.user;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard'),
@@ -34,86 +29,51 @@ class DashboardScreen extends StatelessWidget {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-      ),
-      drawer: Drawer(
-        child: Column(
-          children: [
-            UserAccountsDrawerHeader(
-              decoration: const BoxDecoration(color: AppTheme.primaryGreen),
-              currentAccountPicture: CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Text(
-                  Formatters.initials(user?.displayName ?? user?.email ?? 'U'),
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryGreen,
-                  ),
+        actions: [
+          // TODO: Remover após teste do Crashlytics
+          IconButton(
+            icon: const Icon(Icons.bug_report, color: Colors.yellow),
+            tooltip: 'Testar Crashlytics',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Testar Crashlytics'),
+                  content: const Text('Escolha o tipo de teste:'),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        FirebaseCrashlytics.instance.recordError(
+                          Exception('Teste non-fatal error'),
+                          StackTrace.current,
+                          reason: 'teste_manual',
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Non-fatal enviado ao Crashlytics!'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                      },
+                      child: const Text('Non-fatal error'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        FirebaseCrashlytics.instance.crash();
+                      },
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      child: const Text('Crash (app fecha!)'),
+                    ),
+                  ],
                 ),
-              ),
-              accountName: Text(
-                user?.displayName ?? 'Usuário',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              accountEmail: Text(user?.email ?? ''),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.dashboard),
-              title: const Text('Dashboard'),
-              selected: true,
-              selectedColor: AppTheme.primaryGreen,
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.receipt_long),
-              title: const Text('Transações'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const TransactionsScreen()),
-                );
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.person),
-              title: const Text('Perfil'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
-            ),
-
-            const Spacer(),
-
-            const Divider(),
-
-            ListTile(
-              leading: const Icon(Icons.exit_to_app, color: Colors.red),
-              title: const Text('Sair', style: TextStyle(color: Colors.red)),
-              onTap: () async {
-                Navigator.pop(context);
-
-                if (await AppDialogs.confirmLogout(context)) {
-                  if (!context.mounted) return;
-
-                  context.read<AuthProvider>().logout();
-                }
-              },
-            ),
-
-            const SizedBox(height: 16),
-          ],
-        ),
+              );
+            },
+          ),
+        ],
       ),
+      drawer: const AppDrawer(currentPage: DrawerPage.dashboard),
       body: _buildDashboardBody(context),
     );
   }
