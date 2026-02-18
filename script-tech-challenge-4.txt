@@ -1,0 +1,49 @@
+
+------- Refatoração e Melhoria da Arquitetura ---------
+
+- Nova estrutura em camadas seguindo os princípios da Clean Architecture
+
+- Separação em "repositories", "providers", "services" e "models"
+
+- Inversão das dependencias com classes abstratas como "i_auth_repository.dart" ao invés
+de "auth_repository.dart" por exemplo.
+
+- Injeções feitas no "app.dart" com MultiProvider.
+
+
+------------- Segurança ---------------
+
+- "flutter pub outdated" utilizado no processo
+    atualizado 17 dependencias do projeto
+
+- Necessário confirmar email para ativar contas
+    Utilizando um gerador de email temporário para demonstração
+
+- Senha forte necessária para criação de contas
+    minimo 8 digitos, 1 maiuscula, 1 minuscula, 1 simbolo e 1 número
+
+- Possíbilidade de ativar TOTP para acessar a conta
+    Utilizando o app "Authy" no meu celular para gerar código de acesso
+
+
+---------- Performance e Otimização ----------
+
+- Aplicado estrategia de lazy render (lista carrega apenas o que é visivel)
+
+- Cache para carregamentos de imagens:
+    Abrir uma transação com comprovante → mostrar o loading na 1ª vez
+    Fechar e abrir de novo → carregamento instantâneo (cache)
+
+- Melhoria na navegação, não é mais necessário voltar no "Dashboard" para navegar,
+utilizando o Drawer em todas as telas
+
+- Bundle size: aumento de 1.3MB apenas com todas as melhorias implementadas,
+total de 20,6Mb.
+
+
+------------ Monitoramento ------------
+
+- Firebase Crashlytics para monitoramento de crashes
+    Clicar no botão 🪲 na Dashboard → gera um crash de exemplo para o monitor do firebase
+
+- Firebase performance monitor para acompanhar métricas do App

@@ -38,8 +38,8 @@ Antes de iniciar, certifique-se de ter instalado:
 ### 1. Clone o repositório
 
 ```bash
-git clone https://github.com/GM-Ferreira/postech-finance-03.git
-cd postech-finance-03
+git clone https://github.com/GM-Ferreira/postech-finance-04.git
+cd postech-finance-04
 ```
 
 ### 2. Instale as dependências
